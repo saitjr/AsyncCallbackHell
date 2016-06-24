@@ -23,10 +23,90 @@ class ViewController: UIViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         
-        let funcs = login() +> tweetList()
+        let funcs = login() +> tweet()
         
-        funcs(para: ["username" : "admin", "password" : "123"]) { result in
+        funcs(para: []) { result in
             print(result)
+        }
+    }
+}
+
+extension ViewController {
+    func login() -> AsyncFunc {
+        return { para, comp in
+            let alamofire = AlamoFire()
+            let para2: [String: Any] = ["username": "admin", "password": "123"]
+            
+            alamofire.request("login", para: para2) { result, error in
+                guard let result2 = result else {
+                    let requestError = RequestError(error: error!)
+                    comp(result: .Failure(requestError))
+                    return
+                }
+                guard let dic = result2 as? [String: Any], let id = dic["id"] as? String, let username = dic["username"] as? String else {
+                    comp(result: .Failure(.Server))
+                    return
+                }
+                let user = User(id: id, username: username)
+                comp(result: .Success(user))
+            }
+        }
+    }
+    
+    func tweet() -> AsyncFunc {
+        return { lastResult, comp in
+            let alamofire = AlamoFire()
+            
+            guard let user = lastResult as? User else {
+                return
+            }
+            let para2: [String: Any] = ["id" : user.id, "date" : "2016"]
+            
+            alamofire.request("tweet", para: para2) { result, error in
+                guard let result2 = result else {
+                    let requestError = RequestError(error: error!)
+                    comp(result: .Failure(requestError))
+                    return
+                }
+                guard let dic = result2 as? [String: Any], let id = dic["id"] as? String, let title = dic["title"] as? String else {
+                    comp(result: .Failure(.Server))
+                    return
+                }
+                let tweet = Tweet(id: id, title: title, publisher: user)
+                comp(result: .Success(tweet))
+            }
+        }
+    }
+}
+
+enum AlamoFireError: Int {
+    case Notfound
+    case JsonFormat
+    case Timeout
+}
+
+typealias Callback = (result: Any?, error: AlamoFireError?) -> Void
+
+struct AlamoFire {
+    var error: AlamoFireError {
+        let randError = Int(arc4random() % 3)
+        guard let error = AlamoFireError(rawValue: randError) else {
+            return .Notfound
+        }
+        return error
+    }
+    
+    func request(url: String, para: [String : Any], comp: Callback) {
+        let randDelay = Int(arc4random() % 2)
+        print("发出请求 \(url)，参数 \(para)")
+        self.dispatchSecond(randDelay) {
+            let randSuccess = arc4random() % 4 <= 2
+            print("\(url) 结果返回")
+            if randSuccess {
+                comp(result: Server.jsonWithUrl(url), error: nil)
+                return
+            }
+            comp(result: nil, error: self.error)
         }
     }
     
@@ -36,37 +116,14 @@ class ViewController: UIViewController {
     }
 }
 
-extension ViewController {
-    func login() -> AsyncFunc {
-        return { para, comp in
-            self.dispatchSecond(1) {
-                print("login 请求参数 \(para)")
-                let rand = arc4random() % 4 <= 2
-                if rand {
-                    let user = User(id: "1", username: "admin")
-                    comp(result: .Success(user))
-                } else {
-                    comp(result: .Failure(.Network))
-                }
-            }
-        }
-    }
+struct Server {
+    static let userJson: [String: Any] = ["id": "1", "username": "admin"]
+    static let tweetJson: [String: Any] = ["id": "1", "title": "Swift"]
     
-    func tweetList() -> AsyncFunc {
-        return { result, comp in
-            self.dispatchSecond(1) {
-                let user = result as! User
-                let para2 = ["id" : user.id, "date" : "2016"]
-                print("tweet 请求参数 \(para2)")
-                let rand = arc4random() % 4 <= 2
-                if rand {
-                    let user = User(id: "1", username: "admin")
-                    let tweet = Tweet(id: "1", title: "Swift", publisher: user)
-                    comp(result: .Success(tweet))
-                } else {
-                    comp(result: .Failure(.Network))
-                }
-            }
+    static func jsonWithUrl(url: String) -> [String: Any] {
+        if url == "login" {
+            return userJson
         }
+        return tweetJson
     }
 }

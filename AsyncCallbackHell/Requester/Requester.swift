@@ -16,6 +16,17 @@ enum Result {
 enum RequestError {
     case Network
     case Server
+    
+    init(error: AlamoFireError) {
+        switch error {
+        case .Notfound:
+            self = .Server
+        case .JsonFormat:
+            self = Server
+        case .Timeout:
+            self = Network
+        }
+    }
 }
 
 typealias Complete = (result: Result) -> Void
@@ -30,7 +41,7 @@ func +>(lhs: AsyncFunc, rhs: AsyncFunc) -> AsyncFunc {
                 rhs(para: lResult) {
                     switch $0 {
                     case .Success(let rResult):
-                        complete(result: .Success(rResult))
+                        complete(result: .Success([lResult] + [rResult]))
                     case .Failure(let rError):
                         complete(result: .Failure(rError))
                     }
